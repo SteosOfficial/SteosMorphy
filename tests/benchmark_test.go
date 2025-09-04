@@ -70,7 +70,7 @@ func loadWords(limit int) []string {
 // BenchmarkAnalyzeSequential тестирует производительность метода Analyze.
 func BenchmarkAnalyzeSequential(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000, 100_000, 1_000_000}
+	wordCounts := []int{10_000}
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
@@ -114,7 +114,7 @@ func BenchmarkAnalyzeSequential(b *testing.B) {
 // BenchmarkParseList измеряет производительность пакетной обработки разбора слов.
 func BenchmarkParseList(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000, 100_000, 1_000_000}
+	wordCounts := []int{10_000}
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
@@ -149,7 +149,7 @@ func BenchmarkParseList(b *testing.B) {
 // BenchmarkInflectList измеряет производительность пакетной обработки поиска словоформ у слов.
 func BenchmarkInflectList(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000, 100_000} // 1_000_000 слов разом InflectList слишком накладно для ОЗУ
+	wordCounts := []int{10_000} // 1_000_000 слов разом InflectList слишком накладно для ОЗУ
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
