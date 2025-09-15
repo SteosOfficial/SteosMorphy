@@ -55,7 +55,7 @@
 
 Установите библиотеку стандартным для Go способом:
 ```bash
-go get github.com/steosofficial/SteosMorphy
+go get github.com/steosofficial/steosmorphy
 ```
 
 ### 1.3. Базовое использование
