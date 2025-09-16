@@ -262,7 +262,7 @@ pip install SteosMorphy
 
 ```python
 # Пример использования в Python
-from gomorphy import MorphAnalyzer
+from steosmorphy import MorphAnalyzer
 
 # Инициализация экземпляра анализатора
 analyzer = MorphAnalyzer()
