@@ -66,7 +66,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/steosofficial/SteosMorphy"
+	SteosMorphy "github.com/steosofficial/steosmorphy/analyzer"
 )
 
 func main() {
