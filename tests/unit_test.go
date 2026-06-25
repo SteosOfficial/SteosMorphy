@@ -3,11 +3,12 @@ package tests
 
 import (
 	"fmt"
-	steosmorphy "github.com/steosofficial/steosmorphy/analyzer"
 	"log"
 	"os"
 	"sort"
 	"testing"
+
+	steosmorphy "github.com/steosofficial/steosmorphy/analyzer"
 )
 
 var analyzer *steosmorphy.MorphAnalyzer
@@ -15,11 +16,15 @@ var analyzer *steosmorphy.MorphAnalyzer
 // TestMain - это специальная функция, которая запускается один раз перед всеми тестами в пакете.
 func TestMain(m *testing.M) {
 	var err error
-	analyzer, err = steosmorphy.LoadMorphAnalyzer()
+	cache := steosmorphy.NewShardedCache[string, steosmorphy.MorphAnalysis](uint32(*cacheCapFlag), uint32(*numShards), steosmorphy.HashString)
+	a, err := steosmorphy.LoadMorphAnalyzer(steosmorphy.AnalyzerConfig{Cache: cache})
+	if err != nil {
+		log.Fatalf("Критическая ошибка: не удалось загрузить словарь для бенчмарка: %v", err)
+	}
 	if err != nil {
 		log.Fatalf("Не удалось загрузить анализатор для тестов: %v", err)
 	}
-
+	analyzer = a
 	os.Exit(m.Run())
 }
 

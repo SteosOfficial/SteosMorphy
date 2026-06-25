@@ -60,19 +60,26 @@ go get github.com/steosofficial/steosmorphy
 
 ### 1.3. Базовое использование
 
-Вот простой пример, который показывает основной функционал
+Вот простой пример, который показывает основной функционал.
+
 ```go
 package main
 
 import (
 	"fmt"
-	SteosMorphy "github.com/steosofficial/steosmorphy/analyzer"
+	steosmorphy "github.com/steosofficial/steosmorphy/analyzer"
 )
 
 func main() {
-	// Инициализируем анализатор. Метод LoadMorphAnalyzer() автоматически найдет
-	// скомпилированный словарь в папке data/.
-	analyzer, err := SteosMorphy.LoadMorphAnalyzer()
+	// Инициализируем конфигирацию анализатора
+	capacity := uint32(1000)
+	shards := uint32(8)
+	config := steosmorphy.AnalyzerConfig{
+		Cache: steosmorphy.NewShardedCache[string, steosmorphy.MorphAnalysis](capacity, shards, steosmorphy.HashString),
+	}
+
+	// Инициализируем анализатор. Метод New() автоматически найдет словарь
+	analyzer, err := steosmorphy.LoadMorphAnalyzer(config)
 	if err != nil {
 		panic(err)
 	}
@@ -84,7 +91,7 @@ func main() {
 	// 2. Печатаем варианты разбора
 	fmt.Printf("Варианты разбора для слова '%s':\n", word)
 	for _, p := range parses {
-		fmt.Printf("  - Лемма: %s Часть речи: %s Падеж: %s\n", p.Lemma, p.PartOfSpeech, p.Case)
+		fmt.Printf("  - Лемма: %-10s Часть речи: %-15s Падеж: %s\n", p.Lemma, p.PartOfSpeech, p.Case)
 	}
 
 	// 3. Печатаем несколько словоформ
@@ -94,7 +101,7 @@ func main() {
 			fmt.Println("  ...")
 			break
 		}
-		fmt.Printf("%s\n", p.Word)
+		fmt.Printf("  - %s\n", p.Word)
 	}
 }
 ```

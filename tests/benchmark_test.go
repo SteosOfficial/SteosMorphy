@@ -2,13 +2,15 @@ package tests
 
 import (
 	"bufio"
+	"flag"
 	"fmt"
-	steosmorphy "github.com/steosofficial/steosmorphy/analyzer"
 	"log"
 	"os"
 	"sync"
 	"testing"
 	"time"
+
+	steosmorphy "github.com/steosofficial/steosmorphy/analyzer"
 )
 
 var (
@@ -17,12 +19,15 @@ var (
 	// Эта переменная нужна, чтобы компилятор не "выкинул" вызовы наших функций
 	// как бесполезные. Присваивая результат этой переменной, мы заставляем код выполниться.
 	benchmarkResult interface{}
+	cacheCapFlag    = flag.Uint("cachecap", 32000, "размер LRU-кэша для тестов")
+	numShards       = flag.Uint("shard", 16, "shard num")
 )
 
 // getTestAnalyzer — потокобезопасная функция для получения единственного экземпляра анализатора.
 func getTestAnalyzer() *steosmorphy.MorphAnalyzer {
 	loadAnalyzerOnce.Do(func() {
-		analyzer, err := steosmorphy.LoadMorphAnalyzer()
+		cache := steosmorphy.NewShardedCache[string, steosmorphy.MorphAnalysis](uint32(*cacheCapFlag), uint32(*numShards), steosmorphy.HashString)
+		analyzer, err := steosmorphy.LoadMorphAnalyzer(steosmorphy.AnalyzerConfig{Cache: cache})
 		if err != nil {
 			log.Fatalf("Критическая ошибка: не удалось загрузить словарь для бенчмарка: %v", err)
 		}
@@ -70,7 +75,7 @@ func loadWords(limit int) []string {
 // BenchmarkAnalyzeSequential тестирует производительность метода Analyze.
 func BenchmarkAnalyzeSequential(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000}
+	wordCounts := []int{10_000, 100_000, 1_000_000}
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
@@ -114,7 +119,7 @@ func BenchmarkAnalyzeSequential(b *testing.B) {
 // BenchmarkParseList измеряет производительность пакетной обработки разбора слов.
 func BenchmarkParseList(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000}
+	wordCounts := []int{10_000, 100_000, 1_000_000}
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
@@ -149,7 +154,7 @@ func BenchmarkParseList(b *testing.B) {
 // BenchmarkInflectList измеряет производительность пакетной обработки поиска словоформ у слов.
 func BenchmarkInflectList(b *testing.B) {
 	analyzer := getTestAnalyzer()
-	wordCounts := []int{10_000} // 1_000_000 слов разом InflectList слишком накладно для ОЗУ
+	wordCounts := []int{10_000, 100_000} // 1_000_000 слов разом InflectList слишком накладно для ОЗУ
 
 	for _, count := range wordCounts {
 		b.Run(fmt.Sprintf("%d_words", count), func(b *testing.B) {
