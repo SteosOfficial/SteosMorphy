@@ -1,4 +1,4 @@
-// Этот файл содержит логику морфологического анализатора.
+// Package analyzer Этот файл содержит логику морфологического анализатора.
 // Он загружает скомпилированный бинарный словарь (morph_3.dawg) и предоставляет
 // API для разбора, склонения и предсказания несловарных слов.
 // Ключевая особенность - использование mmap для Zero-Copy загрузки, что минимизирует
@@ -31,7 +31,21 @@ import (
 // EnvDictPath - имя переменной окружения для переопределения пути к словарю.
 const EnvDictPath = "STEOSMORPHY_DICT_PATH"
 
+// --- ИНТЕРФЕЙСЫ ---
+
+// Cache — интерфейс кэша разборов. Любая реализация с Get/Put подходит.
+type Cache[K comparable, V any] interface {
+	Get(key K) (V, bool)
+	Put(key K, val V)
+}
+
 // --- СТРУКТУРЫ ДАННЫХ ---
+
+// AnalyzerConfig - Хранит конфигурацию анализатора
+// Пустой конфиг (AnalyzerConfig{}) => Cache == nil => кэширование отключено.
+type AnalyzerConfig struct {
+	Cache Cache[string, MorphAnalysis] // уже созданный кэш либо nil
+}
 
 // MorphInfo - Хранит индексы, указывающие на пулы строк и информацию о парадигме.
 type MorphInfo struct {
@@ -106,6 +120,11 @@ type ComplexData struct {
 	ParadigmToLemmaID map[uint32]uint32         // Карта для быстрого поиска леммы по ID парадигмы.
 }
 
+type MorphAnalysis struct {
+	detectList []*Parsed
+	lexemsList []*Parsed
+}
+
 // MorphAnalyzer - основная структура, хранящая все данные и состояние анализатора.
 type MorphAnalyzer struct {
 	// Данные словаря.
@@ -124,6 +143,8 @@ type MorphAnalyzer struct {
 	predictEdges    []FlatEdge    // Ребра DAWG предсказателя.
 	predictPayloads []PredictInfo // Полезная нагрузка DAWG предсказателя.
 
+	cache Cache[string, MorphAnalysis] // nil - кэширование отключено
+
 	// Ссылка на mmap-объект, чтобы он не был собран сборщиком мусора
 	// и память оставалась доступной.
 	mmapFile mmap.MMap
@@ -139,7 +160,21 @@ type PredictionCandidate struct {
 // --- ЛОГИКА АНАЛИЗАТОРА ---
 
 // LoadMorphAnalyzer - конструктор анализатора.
-func LoadMorphAnalyzer() (*MorphAnalyzer, error) {
+func LoadMorphAnalyzer(config AnalyzerConfig) (*MorphAnalyzer, error) {
+	a, err := createAnalyzer()
+	if err != nil {
+		return nil, err
+	}
+
+	// apply config
+	apply := func(config AnalyzerConfig) {
+		a.cache = config.Cache // nil при пустом конфиге => кэш выключен
+	}
+	apply(config)
+	return a, nil
+}
+
+func createAnalyzer() (*MorphAnalyzer, error) {
 	dictPath := os.Getenv(EnvDictPath)
 	if dictPath != "" {
 		return loadInternal(dictPath)
@@ -283,6 +318,7 @@ func loadInternal(filepath string) (*MorphAnalyzer, error) {
 		predictNodes:      predictNodes,
 		predictEdges:      predictEdges,
 		predictPayloads:   predictPayloads,
+		cache:             nil,
 		mmapFile:          mmapFile,
 	}
 
@@ -363,22 +399,39 @@ func bytesToSlice[T any](b []byte) []T {
 // Analyze - главный публичный метод. Принимает слово и возвращает полный его разбор.
 // Работает для словарных и несловарных слов
 func (a *MorphAnalyzer) Analyze(word string) ([]*Parsed, []*Parsed) {
-	// Сначала пытаемся найти слово в словаре.
-	parses := a.Parse(word)
-	if len(parses) > 0 {
-		// Если нашли, то и все его формы тоже есть в словаре.
-		forms := a.Inflect(word)
-		return parses, forms
+	// Пытаемся найти слово в кэше
+	if a.cache != nil {
+		if result, ok := a.cache.Get(word); ok {
+			return result.detectList, result.lexemsList
+		}
 	}
-	// Если слово не найдено, пытаемся его предсказать.
-	predictedParses := a.ParsePredicted(word)
-	if predictedParses == nil {
-		// Если и предсказать не удалось, возвращаем nil.
-		return nil, nil
+
+	dawglogic := func(word string) ([]*Parsed, []*Parsed) {
+		// После, пытаемся найти слово в словаре.
+		parses := a.Parse(word)
+		if len(parses) > 0 {
+			// Если нашли, то и все его формы тоже есть в словаре.
+			forms := a.Inflect(word)
+			return parses, forms
+		}
+
+		// Если слово не найдено, пытаемся его предсказать.
+		predictedParses := a.ParsePredicted(word)
+		if predictedParses == nil {
+			// Если и предсказать не удалось, возвращаем nil.
+			return nil, nil
+		}
+		// Если предсказание удалось, генерируем для него все словоформы.
+		predictedForms := a.Predict(word, predictedParses[0].Lemma)
+		return predictedParses, predictedForms
 	}
-	// Если предсказание удалось, генерируем для него все словоформы.
-	predictedForms := a.Predict(word, predictedParses[0].Lemma)
-	return predictedParses, predictedForms
+	parses, forms := dawglogic(word)
+
+	if a.cache != nil {
+		a.cache.Put(word, MorphAnalysis{parses, forms})
+	}
+
+	return parses, forms
 }
 
 // Inflect генерирует все словоформы для словарного слова.
